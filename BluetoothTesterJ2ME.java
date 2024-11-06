@@ -68,7 +68,7 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
     
     public void commandAction(Command c, Displayable d) {
         if (c.getLabel().equals("5")) {
-            sendSignal();
+            sendSignal();  // Send signal when the "5" button is pressed
         }
     }
 }
