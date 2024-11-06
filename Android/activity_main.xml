@@ -1,27 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:gravity="center">
 
-    <!-- TextView for Signal Light Status -->
-    <TextView
-        android:id="@+id/signalLight"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Signal Light: OFF"
-        android:textSize="18sp"
-        android:padding="8dp" />
-
-    <!-- Button to Send Bluetooth Signal -->
     <Button
-        android:id="@+id/sendButton"
+        android:id="@+id/sendSignalButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Send Signal"
-        android:padding="8dp"
-        android:layout_marginTop="16dp" />
+        android:text="Send Signal" />
 
+    <View
+        android:id="@+id/signalLight"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginTop="20dp"
+        android:background="@android:color/darker_gray" />
 </LinearLayout>
