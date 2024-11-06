@@ -51,41 +51,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-    // Define a request code for the permission
-    private val btPermissionRequestCode = 1
-
     @RequiresApi(Build.VERSION_CODES.S)
     private fun connectToBluetoothDevice() {
-        val deviceAddress = "f8:a9:d0:ed:11:56" // Replace with your dumbphone's Bluetooth MAC address
+        val deviceAddress =
+            "f8:a9:d0:ed:11:56" // Replace with your dumbphone's Bluetooth MAC address
         val device: BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceAddress)
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
             try {
-                bluetoothSocket = device?.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+                bluetoothSocket =
+                    device?.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
                 bluetoothSocket?.connect()
             } catch (e: IOException) {
                 Log.e("Bluetooth", "Could not connect to device", e)
-            }
-        } else {
-            // Request the BLUETOOTH_CONNECT permission
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
-                btPermissionRequestCode
-            )
-        }
-    }
-
-    // Handle the result of the permission request
-    @RequiresApi(Build.VERSION_CODES.S)
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == btPermissionRequestCode) {
-            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                // Permission was granted; try to connect again
-                connectToBluetoothDevice()
-            } else {
-                Log.e("Bluetooth", "Bluetooth connection permission denied")
             }
         }
     }
@@ -94,7 +76,7 @@ class MainActivity : AppCompatActivity() {
         bluetoothSocket?.let { socket ->
             try {
                 val outputStream: OutputStream = socket.outputStream
-                outputStream.write("signal".toByteArray()) // Send signal as a string
+                outputStream.write(1) // Send integer 1
                 outputStream.flush()
             } catch (e: IOException) {
                 Log.e("Bluetooth", "Could not send signal", e)
@@ -125,5 +107,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }.start()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        bluetoothSocket?.close()
     }
 }
