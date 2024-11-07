@@ -8,16 +8,19 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
     private Display display;
     private Form mainForm;
     private boolean lightOn = false;
+    private boolean isConnected = false;
     private StreamConnection connection;
     private DataInputStream inputStream;
     private DataOutputStream outputStream;
     private DiscoveryAgent discoveryAgent;
     private String serverUrl;
     private Command toggleLightCommand = new Command("Toggle Light", Command.ITEM, 1);
+    private StringItem connectionStatus = new StringItem("Status: ", "Disconnected"); // Initial status
 
     public void startApp() {
         display = Display.getDisplay(this);
         mainForm = new Form("Bluetooth Connection Tester");
+        mainForm.append(connectionStatus);  // Show initial connection status
         updateLight();
 
         mainForm.addCommand(toggleLightCommand); // Add the "Toggle Light" command
@@ -29,7 +32,7 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
                 try {
                     LocalDevice localDevice = LocalDevice.getLocalDevice();
                     discoveryAgent = localDevice.getDiscoveryAgent();
-                    
+
                     // Start device discovery and connect to the server
                     discoverAndConnect();
                 } catch (Exception e) {
@@ -40,7 +43,7 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
     }
 
     private void discoverAndConnect() throws IOException {
-        // Ensure the MIDlet is discoverable and find Bluetooth devices
+        // Set the MIDlet as discoverable and search for the target device
         discoveryAgent.startInquiry(DiscoveryAgent.GIAC, new DiscoveryListener() {
             public void deviceDiscovered(RemoteDevice btDevice, DeviceClass cod) {
                 try {
@@ -61,9 +64,14 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
                         connection = (StreamConnection) Connector.open(serverUrl);
                         inputStream = connection.openDataInputStream();
                         outputStream = connection.openDataOutputStream();
+                        isConnected = true;
+                        updateConnectionStatus();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+                } else {
+                    isConnected = false;
+                    updateConnectionStatus();
                 }
             }
             public void serviceSearchCompleted(int transID, int respCode) {}
@@ -72,7 +80,13 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
 
     protected void updateLight() {
         mainForm.deleteAll();
+        mainForm.append(connectionStatus);  // Show connection status
         mainForm.append("Signal Light: " + (lightOn ? "ON" : "OFF"));
+    }
+
+    protected void updateConnectionStatus() {
+        connectionStatus.setText(isConnected ? "Connected" : "Disconnected");
+        updateLight();
     }
 
     protected void toggleLight() {
@@ -86,8 +100,10 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
 
     protected void sendSignal() {
         try {
-            outputStream.writeInt(lightOn ? 1 : 0);  // Send the current light state to the Android app
-            outputStream.flush();
+            if (isConnected) {
+                outputStream.writeInt(lightOn ? 1 : 0);  // Send the current light state to the Android app
+                outputStream.flush();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
