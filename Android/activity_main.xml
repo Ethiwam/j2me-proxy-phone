@@ -2,19 +2,41 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:gravity="center"
     android:orientation="vertical"
-    android:gravity="center">
+    android:padding="16dp">
 
-    <Button
-        android:id="@+id/sendSignalButton"
+    <!-- Toggle Light -->
+    <TextView
+        android:id="@+id/lightTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Send Signal" />
+        android:layout_marginBottom="20dp"
+        android:background="#FF0000"
+        android:padding="20dp"
+        android:text="Light Off"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp" />
 
-    <View
-        android:id="@+id/signalLight"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
-        android:layout_marginTop="20dp"
-        android:background="@android:color/darker_gray" />
+    <!-- Button -->
+    <Button
+        android:id="@+id/toggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Toggle Light"
+        android:textSize="20sp" />
+
+    <!-- Bluetooth Indicator -->
+    <TextView
+        android:id="@+id/bluetoothTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        android:background="#FFFFFF"
+        android:padding="20dp"
+        android:text="DISCONNECTED"
+        android:textColor="#000000"
+        android:textSize="20sp" />
+
+
 </LinearLayout>

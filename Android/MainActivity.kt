@@ -1,116 +1,137 @@
-package com.bluetoothtesterandroid
+package com.simplebuttonandtoggle
 
-import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
-import android.content.pm.PackageManager
-import android.os.Build
+import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
-import android.util.Log
-import android.view.View
 import android.widget.Button
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.IOException
-import java.io.InputStream
-import java.io.OutputStream
 import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
-    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
-    private var bluetoothSocket: BluetoothSocket? = null
-    private lateinit var sendSignalButton: Button
-    private lateinit var signalLight: View
+    // UI
+    private lateinit var lightTextView: TextView
+    private lateinit var bluetoothTextView: TextView
+    private var isLightOn = false
+    private var isBluetoothConnected = false
+    private val REQUEST_ENABLE_BT = 1
 
-    @RequiresApi(Build.VERSION_CODES.S)
+    // Bluetooth
+    private val MY_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // UUID for the Bluetooth connection
+    private var serverSocket: BluetoothServerSocket? = null
+
+    // Bluetooth Adapter and Manager
+    private val bluetoothManager: BluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
+    private val bluetoothAdapter: BluetoothAdapter? by lazy { bluetoothManager.adapter }
+
+    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        sendSignalButton = findViewById(R.id.sendSignalButton)
-        signalLight = findViewById(R.id.signalLight)
+        // Initialize views
+        lightTextView = findViewById(R.id.lightTextView)
+        bluetoothTextView = findViewById(R.id.bluetoothTextView)
+        val toggleButton: Button = findViewById(R.id.toggleButton)
 
-        // Register for permission result for Bluetooth connection
-        requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-
-        sendSignalButton.setOnClickListener {
-            sendSignal()
+        // Set button click listener to toggle the light
+        toggleButton.setOnClickListener {
+            isLightOn = !isLightOn
+            updateLightStatus()
         }
 
-        connectToBluetoothDevice() // Initiates connection to your dumbphone
-        startListeningForSignals()
+        // Enable Bluetooth if it's not already enabled
+        if (bluetoothAdapter == null) {
+            bluetoothTextView.text = "Bluetooth not supported"
+        } else {
+            if (bluetoothAdapter?.isEnabled == false) {
+                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT)
+            }
+            // Start Bluetooth server connection
+            startBluetoothServer()
+        }
     }
 
-    private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
-            if (!isGranted) {
-                Log.e("Bluetooth", "Bluetooth permission denied")
-            }
-        }
-
-    @RequiresApi(Build.VERSION_CODES.S)
-    private fun connectToBluetoothDevice() {
-        val deviceAddress =
-            "f8:a9:d0:ed:11:56" // Replace with your dumbphone's Bluetooth MAC address
-        val device: BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceAddress)
-
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
+    // Starts the Bluetooth server socket to listen for connections
+    @SuppressLint("MissingPermission")
+    private fun startBluetoothServer() {
+        CoroutineScope(Dispatchers.IO).launch {
             try {
-                bluetoothSocket =
-                    device?.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
-                bluetoothSocket?.connect()
-            } catch (e: IOException) {
-                Log.e("Bluetooth", "Could not connect to device", e)
-            }
-        }
-    }
+                // Create the Bluetooth server socket
+                serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord("BluetoothTesterApp", MY_UUID)
 
-    private fun sendSignal() {
-        bluetoothSocket?.let { socket ->
-            try {
-                val outputStream: OutputStream = socket.outputStream
-                outputStream.write(1) // Send integer 1
-                outputStream.flush()
-            } catch (e: IOException) {
-                Log.e("Bluetooth", "Could not send signal", e)
-            }
-        }
-    }
+                // Wait for a client to connect
+                val socket: BluetoothSocket? = serverSocket?.accept()
 
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun startListeningForSignals() {
-        bluetoothSocket?.let { socket ->
-            Thread {
-                try {
-                    val inputStream: InputStream = socket.inputStream
-                    val buffer = ByteArray(1024)
-                    var bytesRead: Int
-
-                    while (true) {
-                        bytesRead = inputStream.read(buffer)
-                        val message = String(buffer, 0, bytesRead)
-                        if (message == "signal_received") {
-                            runOnUiThread {
-                                signalLight.setBackgroundColor(getColor(R.color.teal_200)) // Set signal light color to indicate signal
-                            }
-                        }
-                    }
-                } catch (e: IOException) {
-                    Log.e("Bluetooth", "Error reading from input stream", e)
+                // When a connection is accepted, handle it
+                socket?.let {
+                    manageConnectedSocket(it)
+                    serverSocket?.close() // Close the server socket once a client is connected
                 }
-            }.start()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
         }
+    }
+
+    // Manages the connection once a client is connected
+    private fun manageConnectedSocket(socket: BluetoothSocket) {
+        // Update connection status on the main thread
+        runOnUiThread {
+            isBluetoothConnected = true
+            updateBluetoothStatus()
+        }
+
+        try {
+            val inputStream = socket.inputStream
+            val outputStream = socket.outputStream
+
+            // Continuously listen for incoming data from the client
+            while (isBluetoothConnected) {
+                val signal = inputStream.read() // Assuming the client sends a single byte signal
+                if (signal == 1) { // If signal is received to toggle light
+                    isLightOn = !isLightOn
+                    runOnUiThread {
+                        updateLightStatus()
+                    }
+                }
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+        } finally {
+            socket.close()
+        }
+    }
+
+    // Updates the light status on screen
+    private fun updateLightStatus() {
+        if (isLightOn) {
+            lightTextView.text = "Light On"
+            lightTextView.setBackgroundColor(Color.GREEN) // Green for 'on' state
+        } else {
+            lightTextView.text = "Light Off"
+            lightTextView.setBackgroundColor(Color.RED) // Red for 'off' state
+        }
+    }
+
+    // Updates the Bluetooth connection status on screen
+    private fun updateBluetoothStatus() {
+            bluetoothTextView.text = if (isBluetoothConnected) "CONNECTED" else "DISCONNECTED"
+        bluetoothTextView.setBackgroundColor(if (isBluetoothConnected) Color.BLUE else Color.GRAY)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        bluetoothSocket?.close()
+        serverSocket?.close() // Close server socket when app is destroyed
     }
 }
