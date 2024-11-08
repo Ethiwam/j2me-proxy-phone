@@ -15,15 +15,15 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
     private DiscoveryAgent discoveryAgent;
     private String serverUrl;
     private Command toggleLightCommand = new Command("Toggle Light", Command.ITEM, 1);
-    private StringItem connectionStatus = new StringItem("Status: ", "Disconnected"); // Initial status
+    private StringItem connectionStatus = new StringItem("Status: ", "Disconnected");
 
     public void startApp() {
         display = Display.getDisplay(this);
         mainForm = new Form("Bluetooth Connection Tester");
-        mainForm.append(connectionStatus);  // Show initial connection status
+        mainForm.append(connectionStatus);
         updateLight();
 
-        mainForm.addCommand(toggleLightCommand); // Add the "Toggle Light" command
+        mainForm.addCommand(toggleLightCommand);
         mainForm.setCommandListener(this);
         display.setCurrent(mainForm);
 
@@ -33,8 +33,8 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
                     LocalDevice localDevice = LocalDevice.getLocalDevice();
                     discoveryAgent = localDevice.getDiscoveryAgent();
 
-                    // Start device discovery and connect to the server
-                    discoverAndConnect();
+                    // Attempt to connect to a known, paired device
+                    connectToPairedDevice();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -42,45 +42,88 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
         }).start();
     }
 
-    private void discoverAndConnect() throws IOException {
-        // Set the MIDlet as discoverable and search for the target device
-        discoveryAgent.startInquiry(DiscoveryAgent.GIAC, new DiscoveryListener() {
-            public void deviceDiscovered(RemoteDevice btDevice, DeviceClass cod) {
+    private void connectToPairedDevice() throws IOException {
+        RemoteDevice[] pairedDevices = discoveryAgent.retrieveDevices(DiscoveryAgent.PREKNOWN);
+
+        // Letting the user know it's searching
+        connectionStatus.setText("Searching...");
+        updateLight();
+
+        if (pairedDevices != null) {
+            for (int i = 0; i < pairedDevices.length; i++) {
+                RemoteDevice device = pairedDevices[i];
                 try {
-                    String deviceName = btDevice.getFriendlyName(false);
-                    if (deviceName.equals("BluetoothTesterApp")) { // Replace with Android device name if needed
+                    String deviceName = device.getFriendlyName(false);
+                    if (deviceName.equals("Notonk")) { // Replace with Android device name if needed
+                        // Device found, start service search on the paired device
                         serverUrl = discoveryAgent.selectService(
-                                new UUID("0000110100001000800000805F9B34FB", false),  // Same UUID as Android server
+                                new UUID("0000110100001000800000805F9B34FB", false),
                                 ServiceRecord.NOAUTHENTICATE_NOENCRYPT, false);
+                        if (serverUrl != null) {
+                            establishConnection(serverUrl);
+                            return;
+                        }
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
-            public void servicesDiscovered(int transID, ServiceRecord[] servRecord) {}
-            public void inquiryCompleted(int discType) {
-                if (serverUrl != null) {
+        }
+        // If no paired device found, fall back to device discovery
+        discoverAndConnect();
+    }
+
+    private void establishConnection(String url) {
+        try {
+            connection = (StreamConnection) Connector.open(url);
+            inputStream = connection.openDataInputStream();
+            outputStream = connection.openDataOutputStream();
+            isConnected = true;
+            updateConnectionStatus();
+        } catch (IOException e) {
+            e.printStackTrace();
+            isConnected = false;
+            updateConnectionStatus();
+        }
+    }
+
+    private void discoverAndConnect() {
+        try {
+            discoveryAgent.startInquiry(DiscoveryAgent.GIAC, new DiscoveryListener() {
+                public void deviceDiscovered(RemoteDevice btDevice, DeviceClass cod) {
                     try {
-                        connection = (StreamConnection) Connector.open(serverUrl);
-                        inputStream = connection.openDataInputStream();
-                        outputStream = connection.openDataOutputStream();
-                        isConnected = true;
-                        updateConnectionStatus();
+                        String deviceName = btDevice.getFriendlyName(false);
+                        if (deviceName.equals("Notonk")) {
+                            serverUrl = discoveryAgent.selectService(
+                                    new UUID("0000110100001000800000805F9B34FB", false),
+                                    ServiceRecord.NOAUTHENTICATE_NOENCRYPT, false);
+                        }
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-                } else {
-                    isConnected = false;
-                    updateConnectionStatus();
                 }
-            }
-            public void serviceSearchCompleted(int transID, int respCode) {}
-        });
+
+                public void servicesDiscovered(int transID, ServiceRecord[] servRecord) {}
+
+                public void inquiryCompleted(int discType) {
+                    if (serverUrl != null) {
+                        establishConnection(serverUrl);
+                    } else {
+                        isConnected = false;
+                        updateConnectionStatus();
+                    }
+                }
+
+                public void serviceSearchCompleted(int transID, int respCode) {}
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     protected void updateLight() {
         mainForm.deleteAll();
-        mainForm.append(connectionStatus);  // Show connection status
+        mainForm.append(connectionStatus);
         mainForm.append("Signal Light: " + (lightOn ? "ON" : "OFF"));
     }
 
@@ -90,18 +133,15 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
     }
 
     protected void toggleLight() {
-        // Toggle light on and off
         lightOn = !lightOn;
         updateLight();
-        
-        // Send the toggle signal to the Android app
         sendSignal();
     }
 
     protected void sendSignal() {
         try {
             if (isConnected) {
-                outputStream.writeInt(lightOn ? 1 : 0);  // Send the current light state to the Android app
+                outputStream.writeInt(lightOn ? 1 : 0);
                 outputStream.flush();
             }
         } catch (IOException e) {
@@ -114,7 +154,7 @@ public class BluetoothTesterJ2ME extends MIDlet implements CommandListener {
 
     public void commandAction(Command c, Displayable d) {
         if (c == toggleLightCommand) {
-            toggleLight();  // Toggle light when "Toggle Light" command is triggered
+            toggleLight();
         }
     }
 }
