@@ -1,13 +1,11 @@
 package com.simplebuttonandtoggle
 
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothServerSocket
-import android.bluetooth.BluetoothSocket
+import android.bluetooth.*
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.ParcelUuid
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -15,7 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.IOException
-import java.util.UUID
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
     // UI
@@ -26,10 +24,9 @@ class MainActivity : AppCompatActivity() {
     private val REQUEST_ENABLE_BT = 1
 
     // Bluetooth
-    private val MY_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // UUID for the Bluetooth connection
+    private val MY_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Default UUID
     private var serverSocket: BluetoothServerSocket? = null
-
-    // Bluetooth Adapter and Manager
+    private var clientSocket: BluetoothSocket? = null
     private val bluetoothManager: BluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
     private val bluetoothAdapter: BluetoothAdapter? by lazy { bluetoothManager.adapter }
 
@@ -67,16 +64,12 @@ class MainActivity : AppCompatActivity() {
     private fun startBluetoothServer() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Create the Bluetooth server socket
                 serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord("BluetoothTesterApp", MY_UUID)
-
-                // Wait for a client to connect
+                bluetoothTextView.text = "SEARCHING..."
                 val socket: BluetoothSocket? = serverSocket?.accept()
-
-                // When a connection is accepted, handle it
                 socket?.let {
                     manageConnectedSocket(it)
-                    serverSocket?.close() // Close the server socket once a client is connected
+                    serverSocket?.close()
                 }
             } catch (e: IOException) {
                 e.printStackTrace()
@@ -86,24 +79,19 @@ class MainActivity : AppCompatActivity() {
 
     // Manages the connection once a client is connected
     private fun manageConnectedSocket(socket: BluetoothSocket) {
-        // Update connection status on the main thread
+        clientSocket = socket
         runOnUiThread {
             isBluetoothConnected = true
             updateBluetoothStatus()
         }
-
         try {
             val inputStream = socket.inputStream
             val outputStream = socket.outputStream
-
-            // Continuously listen for incoming data from the client
             while (isBluetoothConnected) {
-                val signal = inputStream.read() // Assuming the client sends a single byte signal
-                if (signal == 1) { // If signal is received to toggle light
+                val signal = inputStream.read()
+                if (signal == 1) {
                     isLightOn = !isLightOn
-                    runOnUiThread {
-                        updateLightStatus()
-                    }
+                    runOnUiThread { updateLightStatus() }
                 }
             }
         } catch (e: IOException) {
@@ -113,25 +101,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Updates the light status on screen
-    private fun updateLightStatus() {
-        if (isLightOn) {
-            lightTextView.text = "Light On"
-            lightTextView.setBackgroundColor(Color.GREEN) // Green for 'on' state
-        } else {
-            lightTextView.text = "Light Off"
-            lightTextView.setBackgroundColor(Color.RED) // Red for 'off' state
+    // Use reflection to create an RFCOMM socket connection to a paired device
+    @SuppressLint("MissingPermission")
+    private fun createRfcommSocket(theBTDevice: BluetoothDevice, channel: Int): BluetoothSocket? {
+        return try {
+            val cls = Class.forName("android.bluetooth.BluetoothDevice")
+            val meth = cls.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+            meth.invoke(theBTDevice, channel) as? BluetoothSocket
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
-    // Updates the Bluetooth connection status on screen
+    // Use reflection to retrieve UUIDs from the Bluetooth device
+    @SuppressLint("MissingPermission")
+    private fun getDeviceUUIDs(device: BluetoothDevice): Array<ParcelUuid>? {
+        return try {
+            val cls = Class.forName("android.bluetooth.BluetoothDevice")
+            val meth = cls.getMethod("getUuids")
+            meth.invoke(device) as? Array<ParcelUuid>
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun updateLightStatus() {
+        if (isLightOn) {
+            lightTextView.text = "Light On"
+            lightTextView.setBackgroundColor(Color.GREEN)
+        } else {
+            lightTextView.text = "Light Off"
+            lightTextView.setBackgroundColor(Color.RED)
+        }
+    }
+
     private fun updateBluetoothStatus() {
-            bluetoothTextView.text = if (isBluetoothConnected) "CONNECTED" else "DISCONNECTED"
+        bluetoothTextView.text = if (isBluetoothConnected) "CONNECTED" else "DISCONNECTED"
         bluetoothTextView.setBackgroundColor(if (isBluetoothConnected) Color.BLUE else Color.GRAY)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        serverSocket?.close() // Close server socket when app is destroyed
+        serverSocket?.close()
+        clientSocket?.close()
     }
 }
